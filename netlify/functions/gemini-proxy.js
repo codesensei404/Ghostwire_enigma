@@ -1,42 +1,49 @@
 exports.handler = async function (event, context) {
-  // Get the secret API key from Netlify's environment variables
   const apiKey = process.env.GEMINI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
-  // Get the user's request from the browser
+  // Check if the API key is even being found by Netlify
+  if (!apiKey) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: "CRITICAL: GEMINI_API_KEY was not found in Netlify's environment variables. Please check your Netlify site settings."
+      }),
+    };
+  }
+
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
   const requestBody = JSON.parse(event.body);
 
   try {
-    // Securely forward the request to Google
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
     });
 
+    // If the response from Google is NOT okay, capture the error message
     if (!response.ok) {
       const errorBody = await response.text();
-      // Pass the error from Google back to the browser
       return {
-        statusCode: response.status,
-        body: `Error from Google API: ${errorBody}`
+        statusCode: response.status, // e.g., 403
+        body: JSON.stringify({
+          error: "Received an error response from Google's API.",
+          google_status_code: response.status,
+          google_error_message: errorBody
+        }),
       };
     }
 
     const data = await response.json();
-
-    // Send Google's successful response back to the browser
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     };
 
   } catch (error) {
-    console.error("Error in Netlify function:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'An internal server error occurred.' }),
+      body: JSON.stringify({ error: 'Failed to make the fetch request to Google.', details: error.message }),
     };
   }
 };
