@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enigma Machine Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+        }
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: #d7c7a7; }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        :root { --rotor-letter-height: 2.5rem; }
+        html {
+            scroll-behavior: smooth;
+        }
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background-color: #383226;
+            color: #d7c7a7;
+        }
+        .enigma-font { font-family: 'Share Tech Mono', monospace; }
+        .card {
+            background-color: #2a251e;
+            border: 1px solid #7a6a53;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        .form-select, .form-input, .form-textarea {
+            background-color: #383226;
+            border: 1px solid #7a6a53;
+            color: #d7c7a7;
+            transition: all 0.2s ease-in-out;
+        }
+        .form-select:focus, .form-input:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #c5a15a;
+            box-shadow: 0 0 0 2px rgba(197, 161, 90, 0.5);
+        }
+        .btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .btn:active {
+            transform: scale(0.97);
+        }
+        .btn-primary {
+            background-color: #c5a15a;
+            color: #2a251e;
+            font-weight: bold;
+        }
+        .btn-primary:hover { background-color: #d7b269; }
+        .btn-primary:disabled {
+            background-color: #ab8e4e;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background-color: #7a6a53;
+            color: #2a251e;
+            font-weight: bold;
+        }
+        .btn-secondary:hover { background-color: #927f63; }
+        .nav-link {
+            position: relative;
+            transition: color 0.3s ease-in-out;
+        }
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: #c5a15a;
+            transform: scaleX(0);
+            transform-origin: center;
+            transition: transform 0.3s ease-in-out;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: #c5a15a;
+        }
+        .nav-link:hover::after, .nav-link.active::after {
+            transform: scaleX(1);
+        }
+        nav.is-scrolled {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transition: box-shadow 0.3s ease-in-out;
+        }
+        .rotor-housing { background: linear-gradient(145deg, #1e1a14, #362e24); border: 2px solid #5a4b38; box-shadow: inset 0 0 10px rgba(0,0,0,0.5), 0 5px 15px rgba(0,0,0,0.3); }
+        .rotor { height: var(--rotor-letter-height); overflow: hidden; border: 2px solid #1a202c; background-color: #333; }
+        .rotor-wheel { transition: transform 0.2s ease-out; }
+        .rotor-letter { height: var(--rotor-letter-height); color: #d7c7a7; }
+        .rotor-window { border-top: 2px solid #c5a15a; border-bottom: 2px solid #c5a15a; position: relative; z-index: 10; }
+        .lampboard { display: grid; grid-template-columns: repeat(10, 1fr); gap: 0.5rem; padding: 1rem; background-color: #2a251e; border-radius: 0.5rem; border: 2px solid #5a4b38; }
+        .lamp { position: relative; width: 100%; padding-bottom: 100%; border-radius: 50%; background-color: #383226; color: #7a6a53; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: bold; transition: all 0.1s ease-in-out; border: 2px solid #5a4b38; }
+        .lamp.lit { background-color: #fde8a1; color: #1a202c; border-color: #fde8a1; box-shadow: 0 0 20px #fde8a1, 0 0 30px #fde8a1, inset 0 0 5px #fff; }
+        .citation { font-size: 0.75rem; color: #7a6a53; text-align: center; margin-top: 0.5rem; }
+        .clickable-image { cursor: pointer; transition: transform 0.2s ease-in-out; }
+        .clickable-image:hover { transform: scale(1.03); }
+        .photo-modal { transition: opacity 0.3s ease-in-out; }
+        .modal-content { transition: transform 0.3s ease-in-out; }
+        .history-image-container { width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 0.5rem; }
+        .history-image-container img { width: 100%; height: 100%; object-fit: cover; }
+        #preloader {
+            position: fixed;
+            inset: 0;
+            background: #2a251e;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease-out;
+        }
+        #preloader p {
+            overflow: hidden;
+            white-space: nowrap;
+            border-right: .15em solid #d7c7a7;
+            animation: typing 2.5s steps(40, end), blink-caret .75s step-end infinite;
+        }
+        .page-section {
+            padding-top: 4rem;
+            padding-bottom: 4rem;
+            border-bottom: 1px solid #5a4b38;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .page-section.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .page-section:last-child {
+            border-bottom: none;
+        }
+        .gemini-spinner {
+            border: 4px solid rgba(215, 199, 167, 0.3);
+            border-radius: 50%;
+            border-top-color: #d7c7a7;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        .keyboard { display: grid; grid-template-columns: repeat(10, 1fr); gap: 0.5rem; }
+        .key { background-color: #383226; border: 2px solid #7a6a53; border-radius: 50%; aspect-ratio: 1/1; color: #d7c7a7; font-size: 1.25rem; transition: all 0.1s; }
+        .key:active { background-color: #c5a15a; color: #2a251e; transform: translateY(2px); }
+        .chat-bubble { max-width: 80%; width: fit-content; }
+        .chat-bubble-user { background-color: #c5a15a; color: #2a251e; border-radius: 1.25rem 1.25rem 0.25rem 1.25rem; }
+        .chat-bubble-ai { background-color: #383226; border: 1px solid #7a6a53; border-radius: 1.25rem 1.25rem 1.25rem 0.25rem; }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-6 lg:p-8">
+    <div id="preloader"><p class="enigma-font text-2xl text-parchment">INITIALIZING SYSTEM...</p></div>
+
+    <div class="max-w-7xl mx-auto opacity-0" id="main-content">
+        <!-- Header Section -->
+        <header class="text-center mb-6">
+            <h1 class="enigma-font text-4xl sm:text-5xl font-bold text-parchment tracking-wider">GHOSTWIRE PROTOCOL-ENIGMA</h1>
+            <p class="text-gray-400 mt-2">An Interactive Web Simulation By Abdulwahab Shaikh</p>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="sticky top-0 z-40 bg-opacity-80 backdrop-blur-md bg-[#383226] py-4 my-4 border-y border-[#5a4b38]">
+            <div class="flex justify-center flex-wrap gap-x-4 gap-y-2 sm:gap-x-8 text-gray-400 enigma-font text-lg">
+                <a href="#intro" class="nav-link">Introduction</a>
+                <a href="#history" class="nav-link">History</a>
+                <a href="#manual" class="nav-link">Manual</a>
+                <a href="#simulator" class="nav-link">Simulator</a>
+                <a href="#radio-room" class="nav-link">Radio Room</a>
+                <a href="#chatbot" class="nav-link">Ask a Codebreaker</a>
+            </div>
+        </nav>
+
+        <main>
+            <!-- Introduction Page -->
+            <section id="intro" class="page-section">
+                <div class="card p-8 rounded-lg shadow-lg text-center max-w-3xl mx-auto">
+                    <h2 class="enigma-font text-3xl font-bold mb-4 text-parchment">Project Introduction</h2>
+                    <img src="https://1drv.ms/i/c/25986b23defa2af3/ERfL040sEvNLhP_7pM5z18wBiwbTn8x7fBe3UqNiGXhfsw?e=ahoGNK" alt="Abdulwahab Shaikh" class="rounded-full mx-auto my-6 border-4 w-40 h-40 object-cover" style="border-color: #7a6a53;">
+                    <p class="text-2xl font-semibold text-parchment">Abdulwahab Shaikh</p>
+                    <p class="text-lg text-gray-400 mt-2">SPS-261 Government Secrecy and Intelligence</p>
+                    <div class="text-left mt-8 space-y-4 text-gray-400">
+                        <p>Welcome to this interactive Enigma machine simulator. This project is a culmination of my interest in cryptography, history, and web development.</p>
+                        <p>This simulation aims to be not just a functional tool for encryption, but also an educational resource to explore one of the most significant chapters in the history of code-breaking. Thank you for visiting.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Page -->
+            <section id="history" class="page-section">
+                 <div class="card p-8 rounded-lg shadow-lg max-w-4xl mx-auto text-gray-400 space-y-6">
+                    <h2 class="enigma-font text-3xl font-bold mb-4 text-parchment text-center">History of the Enigma</h2>
+                    <p>The Enigma machine is a cipher device developed and used in the early- to mid-20th century to protect commercial, diplomatic and military communication. It was employed extensively by Nazi Germany during World War II, in all branches of the German military.</p>
+                    <div class="flex flex-col md:flex-row gap-8 items-center">
+                        <div class="w-full md:w-1/2">
+                            <div class="history-image-container">
+                                <img src="https://i.imgur.com/J3mS5wB.jpeg" alt="A German Enigma machine from WWII" class="clickable-image">
+                            </div>
+                            <p class="citation">Image: M4 Enigma, Wikimedia Commons, Public Domain</p>
+                        </div>
+                        <p class="w-full md:w-1/2">The machine's security depended on a series of electro-mechanical rotors that scrambled the 26 letters of the alphabet. In its typical use, one person entered text on the Enigma's keyboard and another person wrote down which of 26 lights above the keyboard lit up at each key press.</p>
+                    </div>
+                    <h3 class="enigma-font text-2xl font-bold pt-4 mt-4 border-t text-parchment text-center" style="border-color: #7a6a53;">Bletchley Park: The Codebreakers</h3>
+                    <p>Bletchley Park was the central site for British codebreaking during World War II. It housed the Government Code and Cypher School (GC&CS), which regularly penetrated the secret communications of the Axis Powers – most importantly the German Enigma and Lorenz ciphers.</p>
+                     <div class="flex flex-col md:flex-row-reverse gap-8 items-center">
+                        <div class="w-full md:w-1/2">
+                            <div class="history-image-container">
+                                <img src="https://i.imgur.com/9i647sH.png" alt="The main manor house at Bletchley Park" class="clickable-image">
+                            </div>
+                            <p class="citation">Image: Bletchley Park Mansion, Wikimedia Commons, CC BY-SA 3.0</p>
+                        </div>
+                        <p class="w-full md:w-1/2">Mathematicians, cryptanalysts, and even chess champions, including the brilliant Alan Turing, worked in secrecy to devise methods and machinery to break Enigma codes. Their work is estimated to have shortened the war by several years, saving countless lives.</p>
+                    </div>
+                 </div>
+            </section>
+
+            <!-- Manual Page -->
+            <section id="manual" class="page-section">
+                <div class="card p-8 rounded-lg shadow-lg max-w-4xl mx-auto text-gray-400 space-y-6">
+                    <h2 class="enigma-font text-3xl font-bold mb-4 text-parchment text-center">How to Use the Simulator</h2>
+                    <ol class="list-decimal list-inside space-y-4">
+                        <li><strong class="text-parchment">Select the Rotors:</strong> Choose three different rotors from the five historical options (I, II, III, IV, V). The order you place them in (Left, Middle, Right) is critical.</li>
+                        <li><strong class="text-parchment">Set Rotor Positions:</strong> Set the initial starting letter for each rotor. This is part of the 'message key'.</li>
+                        <li><strong class="text-parchment">Choose the Reflector:</strong> The reflector sends the signal back through the rotors by a different path. Select either UKW-B or UKW-C.</li>
+                         <li><strong class="text-parchment">Configure the Plugboard:</strong> Connect pairs of letters by typing two-letter groups separated by spaces (e.g., `AV BS CG`).</li>
+                        <li><strong class="text-parchment">Choose an Encryption Mode:</strong> Use the toggle to switch between "Bulk Mode" (for processing entire messages at once) and "Keyboard Mode" (for single-letter, real-time encryption).</li>
+                         <li><strong class="text-parchment">Symmetrical Encryption:</strong> To decrypt a message, set up the machine with the identical settings used for encryption, input the ciphertext, and the original plaintext will appear.</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- Simulator Page -->
+            <section id="simulator" class="page-section">
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+                    <div class="card p-6 rounded-lg shadow-lg">
+                        <h2 class="enigma-font text-xl font-bold text-center mb-4 text-parchment">ROTORS</h2>
+                        <div class="rotor-housing p-4 rounded-lg flex justify-center space-x-4">
+                            <div class="rotor-window w-16 h-16 bg-black bg-opacity-25 rounded-md flex items-center justify-center"><div class="rotor" id="rotor-visual-3"><div class="rotor-wheel text-3xl font-bold flex flex-col items-center justify-center"></div></div></div>
+                            <div class="rotor-window w-16 h-16 bg-black bg-opacity-25 rounded-md flex items-center justify-center"><div class="rotor" id="rotor-visual-2"><div class="rotor-wheel text-3xl font-bold flex flex-col items-center justify-center"></div></div></div>
+                            <div class="rotor-window w-16 h-16 bg-black bg-opacity-25 rounded-md flex items-center justify-center"><div class="rotor" id="rotor-visual-1"><div class="rotor-wheel text-3xl font-bold flex flex-col items-center justify-center"></div></div></div>
+                        </div>
+                    </div>
+                    <div class="card p-6 rounded-lg shadow-lg">
+                        <h2 class="enigma-font text-xl font-bold text-center mb-4 text-parchment">LAMPBOARD</h2>
+                         <div class="lampboard" id="lampboard"></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="card p-6 rounded-lg shadow-lg">
+                            <div class="flex justify-center items-center mb-4">
+                                <span class="mr-2 text-gray-400">Bulk Mode</span>
+                                <label for="mode-toggle" class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" value="" id="mode-toggle" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-yellow-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                                </label>
+                                <span class="ml-2 text-gray-400">Keyboard Mode</span>
+                            </div>
+                            <div id="bulk-mode-ui">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <label for="plaintext" class="block text-sm font-bold">INPUT</label>
+                                            <button id="gemini-theme-btn" class="btn btn-secondary text-xs px-2 py-1 rounded-md flex items-center space-x-1">
+                                                <span>✨ Generate Message</span>
+                                            </button>
+                                        </div>
+                                        <textarea id="plaintext" class="form-textarea w-full h-64 p-3 rounded-md enigma-font" placeholder="Enter your text here..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label for="ciphertext" class="block text-sm font-bold mb-2">OUTPUT</label>
+                                        <textarea id="ciphertext" class="form-textarea w-full h-64 p-3 rounded-md enigma-font" readonly placeholder="Result will appear here..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="keyboard-mode-ui" class="hidden">
+                                <div id="keyboard" class="keyboard max-w-lg mx-auto mb-4"></div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                     <div>
+                                        <label class="block text-sm font-bold mb-2">INPUT</label>
+                                        <p id="keyboard-input" class="form-textarea w-full h-24 p-3 rounded-md enigma-font break-words"></p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-bold mb-2">OUTPUT</label>
+                                        <p id="keyboard-output" class="form-textarea w-full h-24 p-3 rounded-md enigma-font break-words"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card p-4 rounded-lg shadow-lg flex items-center justify-center space-x-4">
+                            <button id="process-btn" class="btn btn-primary py-3 px-8 rounded-lg text-lg">Encrypt / Decrypt</button>
+                            <button id="reset-btn" class="btn btn-secondary py-3 px-8 rounded-lg text-lg">Reset All</button>
+                            <button id="mute-btn" title="Toggle Sound" class="btn bg-gray-600 hover:bg-gray-700 p-3 rounded-full text-white">
+                                <svg id="sound-on-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                                <svg id="sound-off-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-1">
+                        <div class="card p-6 rounded-lg shadow-lg space-y-6">
+                            <h2 class="enigma-font text-2xl font-bold text-center border-b pb-3" style="border-color: #7a6a53;">Machine Settings</h2>
+                            <div>
+                                <h3 class="font-bold mb-2 text-center">Rotors (R-M-L)</h3>
+                                <div class="grid grid-cols-3 gap-3">
+                                    <select id="rotor1" class="form-select w-full p-2 rounded-md enigma-font text-center"><option selected>I</option><option>II</option><option>III</option><option>IV</option><option>V</option></select>
+                                    <select id="rotor2" class="form-select w-full p-2 rounded-md enigma-font text-center"><option>I</option><option selected>II</option><option>III</option><option>IV</option><option>V</option></select>
+                                    <select id="rotor3" class="form-select w-full p-2 rounded-md enigma-font text-center"><option>I</option><option>II</option><option selected>III</option><option>IV</option><option>V</option></select>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="font-bold mb-2 text-center">Positions (R-M-L)</h3>
+                                <div class="grid grid-cols-3 gap-3">
+                                    <input type="text" id="pos1" value="A" maxlength="1" class="form-input p-2 rounded-md enigma-font text-center uppercase">
+                                    <input type="text" id="pos2" value="A" maxlength="1" class="form-input p-2 rounded-md enigma-font text-center uppercase">
+                                    <input type="text" id="pos3" value="A" maxlength="1" class="form-input p-2 rounded-md enigma-font text-center uppercase">
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="font-bold mb-2 text-center">Reflector</h3>
+                                <select id="reflector" class="form-select w-full p-2 rounded-md enigma-font text-center"><option value="B" selected>UKW-B</option><option value="C">UKW-C</option></select>
+                            </div>
+                            <div>
+                                <h3 class="font-bold mb-2 text-center">Plugboard</h3>
+                                <input type="text" id="plugboard" class="form-input w-full p-2 rounded-md enigma-font uppercase" placeholder="e.g., AB CD EF">
+                                <p class="text-xs text-gray-400 mt-2 text-center">Enter up to 10 letter pairs.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Radio Room Section -->
+            <section id="radio-room" class="page-section">
+                <div class="card p-8 rounded-lg shadow-lg max-w-4xl mx-auto text-gray-400 space-y-6">
+                    <h2 class="enigma-font text-3xl font-bold mb-4 text-parchment text-center">Radio Room: Morse Translator</h2>
+                    <p class="text-center">Translate messages to and from Morse code, the primary method for transmitting encrypted signals during WWII.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="morse-input" class="block text-sm font-bold mb-2">TEXT</label>
+                            <textarea id="morse-input" class="form-textarea w-full h-48 p-3 rounded-md enigma-font" placeholder="Enter text to translate..."></textarea>
+                        </div>
+                         <div>
+                            <label for="morse-output" class="block text-sm font-bold mb-2">MORSE CODE</label>
+                            <textarea id="morse-output" class="form-textarea w-full h-48 p-3 rounded-md enigma-font" placeholder="...---..."></textarea>
+                        </div>
+                    </div>
+                    <div class="flex justify-center items-center flex-wrap gap-4 pt-4">
+                        <button id="text-to-morse-btn" class="btn btn-primary py-2 px-6">Text to Morse ↓</button>
+                        <button id="morse-to-text-btn" class="btn btn-primary py-2 px-6">Morse to Text ↑</button>
+                        <button id="play-morse-btn" class="btn btn-secondary py-2 px-6">Play Sound</button>
+                        <button id="clear-morse-btn" class="btn btn-secondary py-2 px-6">Clear</button>
+                    </div>
+                </div>
+            </section>
+
+             <!-- Ask a Codebreaker Section -->
+            <section id="chatbot" class="page-section">
+                <div class="card p-8 rounded-lg shadow-lg max-w-4xl mx-auto text-gray-400 space-y-6">
+                    <h2 class="enigma-font text-3xl font-bold mb-4 text-parchment text-center">Ask a Codebreaker</h2>
+                    <p class="text-center">Have a question about the Enigma, Bletchley Park, or WWII codebreaking? Ask an "insider." Answers are generated by the Gemini AI.</p>
+                    <div id="chat-window" class="h-96 overflow-y-auto p-4 bg-[#383226] rounded-lg border border-[#7a6a53] flex flex-col space-y-4">
+                        <!-- Chat messages will appear here -->
+                    </div>
+                    <div class="flex gap-4 items-center pt-4">
+                        <input type="text" id="chat-input" class="form-input w-full p-3 rounded-lg enigma-font" placeholder="Ask your question...">
+                        <button id="chat-send-btn" class="btn btn-primary p-3 rounded-lg flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="error-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-4"><div class="bg-red-900 border-2 border-red-500 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl"><h2 class="enigma-font text-2xl font-bold mb-4 text-red-200">Configuration Error</h2><p id="error-message" class="mb-6 text-red-200"></p><button id="close-modal-btn" class="btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg">Acknowledge</button></div></div>
+    <div id="photo-modal" class="photo-modal fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center hidden z-50 p-4 opacity-0 pointer-events-none"><div class="modal-content relative max-w-4xl max-h-full transform scale-95"><img id="modal-image" src="" alt="Enlarged view" class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"><button id="close-photo-modal-btn" class="absolute -top-4 -right-4 bg-white text-black rounded-full h-10 w-10 flex items-center justify-center text-2xl font-bold">&times;</button></div></div>
+    <div id="theme-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-4"><div class="card p-8 rounded-lg shadow-lg max-w-sm w-full text-center"><h2 class="enigma-font text-2xl font-bold mb-4 text-parchment">Generate Themed Message</h2><p class="mb-4 text-gray-400">Enter a theme for your message (e.g., "U-boat coordinates", "spy rendezvous").</p><input type="text" id="theme-input" class="form-input w-full p-2 rounded-md enigma-font" placeholder="Enter theme..."><div class="flex justify-center mt-6 space-x-4"><button id="submit-theme-btn" class="btn btn-primary py-2 px-6">Generate</button><button id="close-theme-modal-btn" class="btn btn-secondary py-2 px-6">Cancel</button></div></div></div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const LAMP_LAYOUT = 'QWERTZUIOPASDFGHJKLYXCVBNM';
+            const KEYBOARD_LAYOUT = ['Q','W','E','R','T','Z','U','I','O','P','A','S','D','F','G','H','J','K','L','Y','X','C','V','B','N','M'];
+            const ROTORS = { 'I':{wiring:'EKMFLGDQVZNTOWYHXUSPAIBRCJ',notch:'Q'},'II':{wiring:'AJDKSIRUXBLHWTMCQGZNPYFVOE',notch:'E'},'III':{wiring:'BDFHJLCPRTXVZNYEIWGAKMUSQO',notch:'V'},'IV':{wiring:'ESOVPZJAYQUIRHXLNFTGKDCMWB',notch:'J'},'V':{wiring:'VZBRGITYUPSDNHLXAWMJQOFECK',notch:'Z'}};
+            const REFLECTORS = {'B':'YRUHQSLDPXNGOKMIEBFZCWVJAT','C':'FVPJIAOYEDRZXWGCTKUQSBNMHL'};
+            const MORSE_CODE = { 'A':'.-', 'B':'-...', 'C':'-.-.', 'D':'-..', 'E':'.', 'F':'..-.', 'G':'--.', 'H':'....', 'I':'..', 'J':'.---', 'K':'-.-', 'L':'.-..', 'M':'--', 'N':'-.', 'O':'---', 'P':'.--.', 'Q':'--.-', 'R':'.-.', 'S':'...', 'T':'-', 'U':'..-', 'V':'...-', 'W':'.--', 'X':'-..-', 'Y':'-.--', 'Z':'--..', '1':'.----', '2':'..---', '3':'...--', '4':'....-', '5':'.....', '6':'-....', '7':'--...', '8':'---..', '9':'----.', '0':'-----', ',':'--..--', '.':'.-.-.-', '?':'..--..', '/':'-..-.', '-':'-....-', '(':'-.--.', ')':'-.--.-', ' ':'/' };
+            let synth, audioInitialized = false;
+            let currentRotorInstances = [];
+            let chatHistory = [];
+
+            const dom = {
+                mainContent: document.getElementById('main-content'),
+                preloader: document.getElementById('preloader'),
+                nav: document.querySelector('nav'),
+                navLinks: document.querySelectorAll('.nav-link'),
+                pageSections: document.querySelectorAll('.page-section'),
+                plaintext: document.getElementById('plaintext'),
+                ciphertext: document.getElementById('ciphertext'),
+                processBtn: document.getElementById('process-btn'),
+                resetBtn: document.getElementById('reset-btn'),
+                plugboard: document.getElementById('plugboard'),
+                errorModal: document.getElementById('error-modal'),
+                errorMessage: document.getElementById('error-message'),
+                closeModalBtn: document.getElementById('close-modal-btn'),
+                muteBtn: document.getElementById('mute-btn'),
+                soundOnIcon: document.getElementById('sound-on-icon'),
+                soundOffIcon: document.getElementById('sound-off-icon'),
+                rotorVisuals:[document.querySelector('#rotor-visual-1 .rotor-wheel'),document.querySelector('#rotor-visual-2 .rotor-wheel'),document.querySelector('#rotor-visual-3 .rotor-wheel')],
+                lampboard: document.getElementById('lampboard'),
+                posInputs:[document.getElementById('pos1'),document.getElementById('pos2'),document.getElementById('pos3')],
+                photoModal: document.getElementById('photo-modal'),
+                modalImage: document.getElementById('modal-image'),
+                closePhotoModalBtn: document.getElementById('close-photo-modal-btn'),
+                clickableImages: document.querySelectorAll('.clickable-image'),
+                geminiThemeBtn: document.getElementById('gemini-theme-btn'),
+                themeModal: document.getElementById('theme-modal'),
+                themeInput: document.getElementById('theme-input'),
+                submitThemeBtn: document.getElementById('submit-theme-btn'),
+                closeThemeModalBtn: document.getElementById('close-theme-modal-btn'),
+                modeToggle: document.getElementById('mode-toggle'),
+                bulkModeUI: document.getElementById('bulk-mode-ui'),
+                keyboardModeUI: document.getElementById('keyboard-mode-ui'),
+                keyboard: document.getElementById('keyboard'),
+                keyboardInput: document.getElementById('keyboard-input'),
+                keyboardOutput: document.getElementById('keyboard-output'),
+                morseInput: document.getElementById('morse-input'),
+                morseOutput: document.getElementById('morse-output'),
+                textToMorseBtn: document.getElementById('text-to-morse-btn'),
+                morseToTextBtn: document.getElementById('morse-to-text-btn'),
+                playMorseBtn: document.getElementById('play-morse-btn'),
+                clearMorseBtn: document.getElementById('clear-morse-btn'),
+                chatWindow: document.getElementById('chat-window'),
+                chatInput: document.getElementById('chat-input'),
+                chatSendBtn: document.getElementById('chat-send-btn'),
+            };
+            
+            // --- GEMINI API CALLER ---
+            const callGeminiAPI = async (payload) => {
+                const apiKey = ""; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                try {
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    if (candidate?.content?.parts?.[0]?.text) {
+                        return candidate.content.parts[0].text;
+                    } else { throw new Error("Invalid response structure from API."); }
+                } catch (error) {
+                    console.error("API call failed:", error);
+                    showError("Failed to get a response from Gemini. Check console for details.");
+                    return null;
+                }
+            };
+            
+            // --- ROBUST AUDIO INITIALIZATION ---
+            const initializeAudio = async () => {
+                if (audioInitialized) return;
+                if (Tone.context.state !== 'running') {
+                    try {
+                        await Tone.start();
+                        synth = new Tone.MetalSynth({frequency:150,envelope:{attack:0.001,decay:0.1,release:0.05},harmonicity:5.1,modulationIndex:32,resonance:4000,octaves:1.5}).toDestination();
+                        audioInitialized = true;
+                        console.log("Audio context started successfully.");
+                    } catch (e) {
+                        console.error("Could not start audio context:", e);
+                    }
+                }
+            };
+            document.body.addEventListener('click', initializeAudio, { once: true });
+            
+            function setupUI() {
+                dom.lampboard.innerHTML = LAMP_LAYOUT.split('').map(char => `<div class="lamp" data-char="${char}"><span class="absolute">${char}</span></div>`).join('');
+                dom.keyboard.innerHTML = KEYBOARD_LAYOUT.map(char => `<button class="key font-bold" data-key="${char}">${char}</button>`).join('');
+                dom.rotorVisuals.forEach(wheel => {
+                    wheel.innerHTML = ALPHABET.split('').map(char => `<div class="rotor-letter flex items-center justify-center">${char}</div>`).join('');
+                });
+                updateRotorVisuals();
+            }
+
+            function updateRotorVisuals() {
+                const letterHeight = dom.rotorVisuals[0].querySelector('.rotor-letter')?.offsetHeight || 40;
+                dom.posInputs.forEach((input, i) => {
+                    const pos = ALPHABET.indexOf(input.value);
+                    if (pos > -1) {
+                         const offset = pos * letterHeight;
+                         dom.rotorVisuals[i].style.transform = `translateY(-${offset}px)`;
+                    }
+                });
+            }
+            
+            function lightUpLamp(char) {
+                const lamp = dom.lampboard.querySelector(`[data-char="${char}"]`);
+                if(lamp) { lamp.classList.add('lit'); setTimeout(() => lamp.classList.remove('lit'), 250); }
+            }
+
+            function getSettings() {
+                return {rotors:[document.getElementById('rotor1').value,document.getElementById('rotor2').value,document.getElementById('rotor3').value],positions:dom.posInputs.map(input => input.value.toUpperCase()),reflector:document.getElementById('reflector').value,plugboard:dom.plugboard.value.toUpperCase()};
+            }
+            
+            function validateSettings(settings) {
+                if(new Set(settings.rotors).size !== 3) return showError("Each rotor must be unique.");
+                if(settings.positions.some(p => p.length !== 1 || !ALPHABET.includes(p))) return showError("Rotor positions must be a single letter (A-Z).");
+                const plugboardPairs = settings.plugboard.split(' ').filter(p => p);
+                const usedChars = new Set();
+                if(plugboardPairs.length > 10) return showError("Max 10 plugboard pairs.");
+                for(const pair of plugboardPairs){
+                    if(pair.length !== 2 || pair[0] === pair[1]) return showError(`Invalid pair: "${pair}".`);
+                    if(usedChars.has(pair[0]) || usedChars.has(pair[1])) return showError(`Letter used multiple times in plugboard.`);
+                    usedChars.add(pair[0]); usedChars.add(pair[1]);
+                }
+                return true;
+            }
+
+            function advanceRotors() {
+                if (currentRotorInstances[1].pos === ALPHABET.indexOf(currentRotorInstances[1].notch)) {
+                    currentRotorInstances[1].pos = (currentRotorInstances[1].pos + 1) % 26;
+                    currentRotorInstances[2].pos = (currentRotorInstances[2].pos + 1) % 26;
+                } else if (currentRotorInstances[0].pos === ALPHABET.indexOf(currentRotorInstances[0].notch)) {
+                    currentRotorInstances[1].pos = (currentRotorInstances[1].pos + 1) % 26;
+                }
+                currentRotorInstances[0].pos = (currentRotorInstances[0].pos + 1) % 26;
+
+                dom.posInputs.forEach((input, i) => input.value = ALPHABET[currentRotorInstances[i].pos]);
+                updateRotorVisuals();
+            }
+
+            function encryptSingleChar(char, plugboardMap, reflector) {
+                let signalChar = plugboardMap.get(char) || char;
+                let signalIndex = ALPHABET.indexOf(signalChar);
+                for(let i=0; i<3; i++){ signalIndex = (signalIndex + currentRotorInstances[i].pos) % 26; signalChar = currentRotorInstances[i].wiring[signalIndex]; signalIndex = ALPHABET.indexOf(signalChar); signalIndex = (signalIndex - currentRotorInstances[i].pos + 26) % 26; }
+                signalIndex = ALPHABET.indexOf(reflector[signalIndex]);
+                for(let i=2; i>=0; i--){ signalIndex = (signalIndex + currentRotorInstances[i].pos) % 26; signalChar = ALPHABET[currentRotorInstances[i].wiring.indexOf(ALPHABET[signalIndex])]; signalIndex = ALPHABET.indexOf(signalChar); signalIndex = (signalIndex - currentRotorInstances[i].pos + 26) % 26; }
+                return plugboardMap.get(ALPHABET[signalIndex]) || ALPHABET[signalIndex];
+            }
+
+            async function processText() {
+                const settings = getSettings();
+                if (!validateSettings(settings)) return;
+                
+                dom.processBtn.disabled = true;
+                dom.ciphertext.value = '_';
+
+                currentRotorInstances = [{...ROTORS[settings.rotors[0]],pos:ALPHABET.indexOf(settings.positions[0])},{...ROTORS[settings.rotors[1]],pos:ALPHABET.indexOf(settings.positions[1])},{...ROTORS[settings.rotors[2]],pos:ALPHABET.indexOf(settings.positions[2])}];
+                const reflector = REFLECTORS[settings.reflector];
+                const plugboardMap = new Map();
+                settings.plugboard.split(' ').filter(p => p).forEach(pair => {plugboardMap.set(pair[0],pair[1]);plugboardMap.set(pair[1],pair[0]);});
+
+                const inputText = dom.plaintext.value.toUpperCase().replace(/[^A-Z]/g, '');
+                let outputText = '';
+
+                for(let char of inputText){
+                    advanceRotors();
+                    
+                    if (audioInitialized && synth && !Tone.Destination.mute) {
+                        synth.frequency.value = 150 + Math.random() * 100;
+                        synth.triggerAttackRelease("32n");
+                    }
+                    
+                    const encryptedChar = encryptSingleChar(char, plugboardMap, reflector);
+                    outputText += encryptedChar;
+                    lightUpLamp(encryptedChar);
+                    
+                    dom.ciphertext.value = outputText.replace(/(.{5})/g, '$1 ').trim() + '_';
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                dom.ciphertext.value = outputText.replace(/(.{5})/g, '$1 ').trim();
+                dom.processBtn.disabled = false;
+            }
+
+            function processSingleKey(char) {
+                const settings = getSettings();
+                if (!validateSettings(settings)) return;
+                
+                const reflector = REFLECTORS[settings.reflector];
+                const plugboardMap = new Map();
+                settings.plugboard.split(' ').filter(p => p).forEach(pair => {plugboardMap.set(pair[0],pair[1]);plugboardMap.set(pair[1],pair[0]);});
+
+                advanceRotors();
+                if (audioInitialized && synth && !Tone.Destination.mute) {
+                    synth.frequency.value = 150 + Math.random() * 100;
+                    synth.triggerAttackRelease("32n");
+                }
+
+                const encryptedChar = encryptSingleChar(char, plugboardMap, reflector);
+                lightUpLamp(encryptedChar);
+                dom.keyboardInput.textContent += char;
+                dom.keyboardOutput.textContent += encryptedChar;
+            }
+
+            function resetAll() {
+                document.getElementById('rotor1').value = 'I'; document.getElementById('rotor2').value = 'II'; document.getElementById('rotor3').value = 'III';
+                dom.posInputs.forEach(input => input.value = 'A'); document.getElementById('reflector').value = 'B';
+                dom.plugboard.value = ''; dom.plaintext.value = ''; dom.ciphertext.value = '';
+                dom.keyboardInput.textContent = ''; dom.keyboardOutput.textContent = '';
+                const settings = getSettings();
+                currentRotorInstances = [{...ROTORS[settings.rotors[0]],pos:ALPHABET.indexOf(settings.positions[0])},{...ROTORS[settings.rotors[1]],pos:ALPHABET.indexOf(settings.positions[1])},{...ROTORS[settings.rotors[2]],pos:ALPHABET.indexOf(settings.positions[2])}];
+                dom.processBtn.disabled = false; updateRotorVisuals();
+            }
+
+            function showError(message) {
+                dom.errorMessage.textContent = message;
+                dom.errorModal.classList.remove('hidden');
+                return false;
+            }
+            
+            dom.processBtn.addEventListener('click', processText);
+            dom.resetBtn.addEventListener('click', resetAll);
+            dom.closeModalBtn.addEventListener('click', () => dom.errorModal.classList.add('hidden'));
+            
+            dom.muteBtn.addEventListener('click', () => {
+                if (!audioInitialized) return; 
+                Tone.Destination.mute = !Tone.Destination.mute;
+                dom.soundOnIcon.classList.toggle('hidden', Tone.Destination.mute);
+                dom.soundOffIcon.classList.toggle('hidden', !Tone.Destination.mute);
+            });
+
+            dom.posInputs.forEach(input => {input.addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/, ''); updateRotorVisuals(); });});
+            dom.plugboard.addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z\s]/g, ''); });
+
+            // --- FEATURE EVENT LISTENERS ---
+            dom.geminiThemeBtn.addEventListener('click', () => dom.themeModal.classList.remove('hidden'));
+            dom.closeThemeModalBtn.addEventListener('click', () => dom.themeModal.classList.add('hidden'));
+            dom.submitThemeBtn.addEventListener('click', async () => {
+                const theme = dom.themeInput.value.trim();
+                if (!theme) return;
+                dom.submitThemeBtn.innerHTML = `<div class="gemini-spinner mx-auto"></div>`;
+                const payload = { contents: [{ parts: [{ text: `Write a short, cryptic, WWII-themed message (under 150 chars) about '${theme}'. Output only the message.` }] }] };
+                const message = await callGeminiAPI(payload);
+                if (message) dom.plaintext.value = message.replace(/\"/g, '');
+                dom.submitThemeBtn.innerHTML = `Generate`;
+                dom.themeModal.classList.add('hidden');
+            });
+            
+            dom.modeToggle.addEventListener('change', (e) => {
+                const isKeyboardMode = e.target.checked;
+                dom.bulkModeUI.classList.toggle('hidden', isKeyboardMode);
+                dom.keyboardModeUI.classList.toggle('hidden', !isKeyboardMode);
+                dom.processBtn.classList.toggle('hidden', isKeyboardMode);
+                resetAll(); // Reset settings when switching modes
+            });
+
+            dom.keyboard.addEventListener('click', (e) => {
+                if (e.target.classList.contains('key')) {
+                    processSingleKey(e.target.dataset.key);
+                }
+            });
+
+            dom.textToMorseBtn.addEventListener('click', () => {
+                const text = dom.morseInput.value.toUpperCase();
+                dom.morseOutput.value = text.split('').map(char => MORSE_CODE[char] || '').join(' ');
+            });
+
+            dom.morseToTextBtn.addEventListener('click', () => {
+                const morse = dom.morseOutput.value.trim().split(' ');
+                const reversedMorse = Object.fromEntries(Object.entries(MORSE_CODE).map(a => a.reverse()));
+                dom.morseInput.value = morse.map(code => reversedMorse[code] || '').join('');
+            });
+
+            dom.clearMorseBtn.addEventListener('click', () => {
+                dom.morseInput.value = '';
+                dom.morseOutput.value = '';
+            });
+
+            dom.playMorseBtn.addEventListener('click', async () => {
+                if (!audioInitialized) return;
+                const morse = dom.morseOutput.value;
+                const dotLen = 0.08;
+                let time = Tone.now();
+                const synth = new Tone.Synth().toDestination();
+                for (const char of morse) {
+                    if (char === '.') {
+                        synth.triggerAttackRelease("C5", dotLen, time);
+                        time += dotLen * 2;
+                    } else if (char === '-') {
+                        synth.triggerAttackRelease("C5", dotLen * 3, time);
+                        time += dotLen * 4;
+                    } else if (char === ' ') {
+                        time += dotLen * 3;
+                    } else if (char === '/') {
+                        time += dotLen * 7;
+                    }
+                }
+            });
+
+            dom.chatSendBtn.addEventListener('click', async () => {
+                const userText = dom.chatInput.value.trim();
+                if (!userText) return;
+
+                addChatMessage(userText, 'user');
+                dom.chatInput.value = '';
+                addChatMessage('...', 'ai', true); // Typing indicator
+
+                const systemInstruction = "You are a Bletchley Park codebreaker from 1943. Answer questions about the Enigma, codebreaking, and WWII, but stay in character. Be a bit secretive and use period-appropriate language like 'old chap', 'top secret', 'Jerrys'. Never break character or mention you are an AI.";
+                chatHistory.push({ role: "user", parts: [{ text: userText }] });
+
+                const payload = {
+                    contents: chatHistory,
+                    systemInstruction: { parts: [{ text: systemInstruction }] }
+                };
+
+                const response = await callGeminiAPI(payload);
+                document.getElementById('ai-typing-indicator')?.remove();
+
+                if (response) {
+                    addChatMessage(response, 'ai');
+                    chatHistory.push({ role: "model", parts: [{ text: response }] });
+                } else {
+                    addChatMessage("Sorry, the lines are a bit fuzzy at the moment. Try again.", 'ai');
+                }
+            });
+            dom.chatInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') dom.chatSendBtn.click(); });
+
+
+            function addChatMessage(text, role, isTyping = false) {
+                const bubble = document.createElement('div');
+                const p = document.createElement('p');
+                p.textContent = text;
+                p.className = 'py-2 px-4';
+                bubble.className = `chat-bubble ${role === 'user' ? 'chat-bubble-user self-end' : 'chat-bubble-ai self-start'}`;
+                if (isTyping) bubble.id = 'ai-typing-indicator';
+                bubble.appendChild(p);
+                dom.chatWindow.appendChild(bubble);
+                dom.chatWindow.scrollTop = dom.chatWindow.scrollHeight;
+            }
+
+            function openPhotoModal(src) {
+                dom.modalImage.src = src; dom.photoModal.classList.remove('hidden');
+                setTimeout(() => {
+                    dom.photoModal.classList.remove('opacity-0', 'pointer-events-none');
+                    dom.photoModal.querySelector('.modal-content').classList.remove('scale-95');
+                }, 10);
+            }
+
+            function closePhotoModal() {
+                dom.photoModal.querySelector('.modal-content').classList.add('scale-95');
+                dom.photoModal.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => dom.photoModal.classList.add('hidden'), 300);
+            }
+
+            dom.clickableImages.forEach(img => img.addEventListener('click', (e) => openPhotoModal(e.target.src)));
+            dom.closePhotoModalBtn.addEventListener('click', closePhotoModal);
+            dom.photoModal.addEventListener('click', (e) => { if (e.target === dom.photoModal) closePhotoModal(); });
+            
+            // --- SCROLL ANIMATIONS & NAV LOGIC ---
+            const sectionObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            dom.pageSections.forEach(section => sectionObserver.observe(section));
+
+            const navObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const id = entry.target.getAttribute('id');
+                        dom.navLinks.forEach(link => {
+                            link.classList.toggle('active', link.getAttribute('href') === `#${id}`);
+                        });
+                    }
+                });
+            }, { rootMargin: "-50% 0px -50% 0px" });
+
+            dom.pageSections.forEach(section => navObserver.observe(section));
+            
+            window.addEventListener('scroll', () => {
+                dom.nav.classList.toggle('is-scrolled', window.scrollY > 50);
+            });
+
+            // --- INITIALIZE ---
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    dom.preloader.style.opacity = '0';
+                    dom.mainContent.style.opacity = '1';
+                    dom.mainContent.style.transition = 'opacity 0.5s ease-in';
+                    setTimeout(() => dom.preloader.style.display = 'none', 500);
+                }, 2500); 
+            });
+
+            setupUI();
+            resetAll(); // Initialize rotor instances
+        });
+    </script>
+</body>
+</html>
+
